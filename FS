@@ -1,9 +1,9 @@
 *&---------------------------------------------------------------------*
-*& Report ZV1_EVE_28
+*& Report ZV1_FS_REPORT
 *&---------------------------------------------------------------------*
 *&
 *&---------------------------------------------------------------------*
-REPORT ZV1_EVE_28.
+REPORT zv1_fs_report.
 
 
 TYPES : BEGIN OF ty_final,
@@ -122,8 +122,31 @@ START-OF-SELECTION.
 
   ENDLOOP.
 
-  IF lt_final IS NOT INITIAL.
-    cl_demo_output=>display( lt_final ).
-  ELSE.
-    WRITE: / 'No data found'.
-  ENDIF.
+*  IF lt_final IS NOT INITIAL.
+*    cl_demo_output=>display( lt_final ).
+*  ELSE.
+*    WRITE: / 'No data found'.
+*  ENDIF.
+*
+
+DATA : lo_alv TYPE REF TO CL_SALV_TABLE.
+
+TRY.
+CALL METHOD cl_salv_table=>factory
+*  EXPORTING
+*    list_display   = IF_SALV_C_BOOL_SAP=>FALSE
+*    r_container    =
+*    container_name =
+  IMPORTING
+    r_salv_table   = lo_alv
+  CHANGING
+    t_table        = lt_final
+    .
+  CATCH cx_salv_msg.
+ENDTRY.
+
+CALL METHOD lo_alv->display
+*  IMPORTING
+*    exit_caused_by_caller =
+*    exit_caused_by_user   =
+    .
