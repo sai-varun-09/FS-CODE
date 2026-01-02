@@ -7,17 +7,18 @@ REPORT zv1_fs_report.
 
 
 TYPES : BEGIN OF ty_final,
-          matnr              TYPE mseg-matnr,
-          werks              TYPE werks_d,
-          charg              TYPE mseg-charg,
-          lgort              TYPE mseg-lgort,
-          maktx              TYPE makt-maktx,
-          bwart              TYPE mseg-bwart,
+          matnr TYPE mseg-matnr,
+          werks TYPE werks_d,
+          charg TYPE mseg-charg,
+          lgort TYPE mseg-lgort,
+          maktx TYPE makt-maktx,
+          bwart TYPE mseg-bwart,
           qlty_hold          TYPE qals-losmenge,
           blocked            TYPE qals-losmenge,
           quality_inspection TYPE qals-losmenge,
           unrestricted       TYPE qals-losmenge,
-          uom                TYPE qals-mengeneinh,
+          uom   TYPE qals-mengeneinh,
+     "     lmen  TYPE string,
         END OF ty_final.
 
 DATA : lt_final TYPE TABLE OF ty_final,
@@ -30,7 +31,7 @@ DATA : lv_matnr TYPE mseg-matnr,
 
 SELECTION-SCREEN : BEGIN OF BLOCK b1 WITH FRAME TITLE TEXT-000.
   SELECT-OPTIONS : s_matnr FOR lv_matnr,
-                   s_werks FOR lv_werks,
+                   s_werks FOR lv_werks OBLIGATORY,
                    s_charg FOR lv_charg,
                    s_lgort FOR lv_lgort.
 SELECTION-SCREEN : END OF BLOCK b1.
@@ -58,7 +59,7 @@ START-OF-SELECTION.
     IF lt_mseg IS NOT INITIAL.
 
 
-      SELECT prueflos, losmenge, mengeneinh, mblnr
+      SELECT prueflos, losmenge, mengeneinh, mblnr , lmenge01 , lmenge04
         FROM qals
         INTO TABLE @DATA(lt_qals)
         FOR ALL ENTRIES IN @lt_mseg
@@ -104,7 +105,7 @@ START-OF-SELECTION.
     ENDIF.
 
     READ TABLE lt_qave INTO DATA(ls_qave)
-        WITH KEY prueflos = ls_qals-prueflos.
+        WITH KEY prueflos = ls_qals-prueflos .
     IF sy-subrc = 0.
       CASE ls_qave-vcode.
         WHEN 'A'.
@@ -113,8 +114,8 @@ START-OF-SELECTION.
           ls_final-qlty_hold = ls_qals-losmenge.
         WHEN 'R'.
           ls_final-blocked = ls_qals-losmenge.
-        WHEN OTHERS.
-          ls_final-quality_inspection = ls_qals-losmenge.
+*       WHEN OTHERS.
+*         ls_final-quality_inspection = ls_qals-losmenge.
       ENDCASE.
     ENDIF.
 
@@ -129,23 +130,52 @@ START-OF-SELECTION.
 *  ENDIF.
 *
 
-DATA : lo_alv TYPE REF TO CL_SALV_TABLE.
+  DATA : lo_alv TYPE REF TO cl_salv_table.
+  DATA : lv_columns TYPE REF TO cl_salv_columns_table.
+  DATA : lv_column TYPE REF TO cl_salv_column.
 
-TRY.
-CALL METHOD cl_salv_table=>factory
+ if lt_final is not INITIAL.
+  TRY.
+      CALL METHOD cl_salv_table=>factory
 *  EXPORTING
 *    list_display   = IF_SALV_C_BOOL_SAP=>FALSE
 *    r_container    =
 *    container_name =
-  IMPORTING
-    r_salv_table   = lo_alv
-  CHANGING
-    t_table        = lt_final
-    .
-  CATCH cx_salv_msg.
-ENDTRY.
+        IMPORTING
+          r_salv_table = lo_alv
+        CHANGING
+          t_table      = lt_final.
+    CATCH cx_salv_msg.
+  ENDTRY.
 
-CALL METHOD lo_alv->display
+  CALL METHOD lo_alv->get_columns
+    RECEIVING
+      value = lv_columns.
+
+  lv_column = lv_columns->get_column( 'QLTY_HOLD' ).
+  lv_column->set_long_text( 'Quality on hold' ).
+  lv_column->set_short_text( 'Q_hold' ).
+  lv_column->set_medium_text( 'Qual_hold' ).
+
+  lv_column = lv_columns->get_column( 'BLOCKED' ).
+  lv_column->set_short_text( 'Blocked' ).
+  lv_column->set_MEDIUM_text( 'Blocked' ).
+  lv_column->set_long_text( 'Blocked' ).
+
+  lv_column = lv_columns->get_column( 'QUALITY_INSPECTION' ).
+  lv_column->set_long_text( 'quality_inspection' ).
+  lv_column->set_short_text( 'q_ins' ).
+  lv_column->set_medium_text( 'qual_insp' ).
+
+  lv_column = lv_columns->get_column( 'UNRESTRICTED' ).
+  lv_column->set_long_text( 'unrestricted' ).
+  lv_column->set_short_text( 'unres' ).
+  lv_column->set_medium_text( 'unrestricted' ).
+
+  CALL METHOD lo_alv->display.
+  else.
+  MESSAGE 'No data found for selection criteria' type 'S'.
+  ENDIF.
 *  IMPORTING
 *    exit_caused_by_caller =
 *    exit_caused_by_user   =
