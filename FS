@@ -1,3 +1,4 @@
+
 **&---------------------------------------------------------------------*
 **& Report ZV1_FS_REPORT
 **&---------------------------------------------------------------------*
@@ -18,17 +19,17 @@ TYPES : BEGIN OF ty_final,
           quality_inspection TYPE qals-losmenge,
           unrestricted       TYPE qlmenge01f,
           uom                TYPE qals-mengeneinh,
-          "     lmen  TYPE string,
+
         END OF ty_final.
 
 DATA : lt_final TYPE TABLE OF ty_final,
        ls_final TYPE ty_final.
 
-DATA : lv_matnr TYPE mseg-matnr,
-       lv_werks TYPE mseg-werks,
-       lv_charg TYPE mseg-charg,
-       lv_lgort TYPE mseg-lgort.
-
+DATA : lv_matnr       TYPE mseg-matnr,
+       lv_werks       TYPE mseg-werks,
+       lv_charg       TYPE mseg-charg,
+       lv_lgort       TYPE mseg-lgort,
+       lv_quality_lot TYPE qals-lmengezub.
 SELECTION-SCREEN : BEGIN OF BLOCK b1 WITH FRAME TITLE TEXT-000.
   SELECT-OPTIONS : s_matnr FOR lv_matnr,
                    s_werks FOR lv_werks OBLIGATORY,
@@ -47,7 +48,7 @@ START-OF-SELECTION.
   IF lt_makt IS NOT INITIAL.
 
 
-    SELECT matnr, werks, mblnr, charg, bwart, lgort
+    SELECT matnr, werks, mblnr, charg, bwart, lgort, cpudt_mkpf, cputm_mkpf
       FROM mseg
       INTO TABLE @DATA(lt_mseg)
       FOR ALL ENTRIES IN @lt_makt
@@ -56,14 +57,16 @@ START-OF-SELECTION.
         AND charg IN @s_charg
         AND lgort IN @s_lgort.
 
+    SORT lt_mseg BY cpudt_mkpf  DESCENDING  cputm_mkpf DESCENDING.
+
     IF lt_mseg IS NOT INITIAL.
 
 
-      SELECT prueflos, losmenge, mengeneinh, mblnr , lmenge01 , lmenge04
+      SELECT prueflos, matnr, werk, selmatnr, mblnr, losmenge, lmengezub, mengeneinh, lmenge01 , lmenge04
         FROM qals
         INTO TABLE @DATA(lt_qals)
         FOR ALL ENTRIES IN @lt_mseg
-        WHERE mblnr = @lt_mseg-mblnr
+        WHERE matnr = @lt_mseg-matnr AND werk IN @s_werks "  mblnr = @lt_mseg-mblnr
           AND charg IN @s_charg.
 
       IF lt_qals IS NOT INITIAL.
@@ -82,7 +85,7 @@ START-OF-SELECTION.
 
   LOOP AT lt_mseg INTO DATA(ls_mseg).
 
-    CLEAR ls_final.
+*    CLEAR ls_final.
 
     ls_final-matnr = ls_mseg-matnr.
     ls_final-werks = ls_mseg-werks.
@@ -99,11 +102,26 @@ START-OF-SELECTION.
 
 
     READ TABLE lt_qals INTO DATA(ls_qals)
-        WITH KEY mblnr = ls_mseg-mblnr.
+        WITH KEY matnr = ls_mseg-matnr.
     IF sy-subrc = 0.
       ls_final-uom = ls_qals-mengeneinh.
+      ls_final-unrestricted = ls_qals-lmenge01.
+      " ls_final-quality_lot = ls_qals-LMENGEZUB.
     ENDIF.
-   ls_final-unrestricted = ls_qals-lmenge01.
+
+*IF  IS NOT INITIAL
+*   AND ls_final-qlty_hold <> 0
+*   AND ls_final-blocked <> 0.
+*
+*      ls_final-quality_inspection = ls_qals-lmengezub.
+*
+*    ENDIF.
+    IF ls_qals-lmengezub IS NOT INITIAL.
+      ls_final-quality_inspection = ls_qals-lmengezub.
+    ENDIF.
+
+
+
     READ TABLE lt_qave INTO DATA(ls_qave)
         WITH KEY prueflos = ls_qals-prueflos .
     IF sy-subrc = 0.
@@ -115,11 +133,14 @@ START-OF-SELECTION.
       ENDCASE.
     ELSE.
       ls_final-quality_inspection = ls_qals-losmenge.
+
     ENDIF.
 
     APPEND ls_final TO lt_final.
+    CLEAR ls_final.
 
   ENDLOOP.
+  DELETE ADJACENT DUPLICATES FROM lt_final COMPARING matnr.
 
 *  IF lt_final IS NOT INITIAL.
 *    cl_demo_output=>display( lt_final ).
