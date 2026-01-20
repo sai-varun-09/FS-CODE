@@ -1,0 +1,258 @@
+*
+*
+*TYPES : BEGIN OF ty_final,
+*          matnr              TYPE mseg-matnr,
+*          werks              TYPE werks_d,
+*          charg              TYPE mseg-charg,
+*          lgort              TYPE mseg-lgort,
+*          maktx              TYPE makt-maktx,
+*          bwart              TYPE mseg-bwart,
+*          qlty_hold          TYPE qlmenge04f, "qals-losmenge,
+*          blocked            TYPE qlmenge04f,
+*          quality_inspection TYPE qals-losmenge,
+*          unrestricted       TYPE qlmenge01f,
+*          uom                TYPE qals-mengeneinh,
+*
+*        END OF ty_final.
+*
+*DATA : lt_final TYPE TABLE OF ty_final,
+*       ls_final TYPE ty_final.
+*DATA : lt_links TYPE TABLE of tline.
+*
+*DATA : lv_matnr       TYPE mseg-matnr,
+*       lv_werks       TYPE mseg-werks,
+*       lv_charg       TYPE mseg-charg,
+*       lv_lgort       TYPE mseg-lgort,
+*       lv_quality_lot TYPE qals-lmengezub.
+*SELECTION-SCREEN : BEGIN OF BLOCK b1 WITH FRAME TITLE TEXT-000.
+*  SELECT-OPTIONS : s_matnr FOR lv_matnr,
+*                   s_werks FOR lv_werks OBLIGATORY,
+*                   s_charg FOR lv_charg,
+*                   s_lgort FOR lv_lgort.
+*SELECTION-SCREEN : END OF BLOCK b1.
+*
+*START-OF-SELECTION.
+*
+*
+*  SELECT matnr, maktx
+*    FROM makt
+*    INTO TABLE @DATA(lt_makt)
+*    WHERE matnr IN @s_matnr.
+*
+*  IF lt_makt IS NOT INITIAL.
+*
+*
+*    SELECT matnr, werks, mblnr, charg, bwart, lgort, cpudt_mkpf, cputm_mkpf
+*      FROM mseg
+*      INTO TABLE @DATA(lt_mseg)
+*      FOR ALL ENTRIES IN @lt_makt
+*      WHERE matnr = @lt_makt-matnr
+*        AND werks IN @s_werks
+*        AND charg IN @s_charg
+*        AND lgort IN @s_lgort.
+*
+*    SORT lt_mseg BY cpudt_mkpf  DESCENDING  cputm_mkpf DESCENDING.
+*
+*    IF lt_mseg IS NOT INITIAL.
+*
+*
+*      SELECT prueflos, matnr, werk, selmatnr, mblnr, losmenge, lmengezub, mengeneinh, lmenge01 , lmenge04
+*        FROM qals
+*        INTO TABLE @DATA(lt_qals)
+*        FOR ALL ENTRIES IN @lt_mseg
+*        WHERE matnr = @lt_mseg-matnr AND werk IN @s_werks "  mblnr = @lt_mseg-mblnr
+*          AND charg IN @s_charg.
+*
+*      IF lt_qals IS NOT INITIAL.
+*
+*
+*        SELECT prueflos, vcode
+*          FROM qave
+*          INTO TABLE @DATA(lt_qave)
+*          FOR ALL ENTRIES IN @lt_qals
+*          WHERE prueflos = @lt_qals-prueflos.
+*
+*      ENDIF.
+*    ENDIF.
+*  ENDIF.
+*
+**----------------------------------------------------------------------------------------------------------------------------------*
+*
+**AT selection screen on help requ(F1)
+*
+**----------------------------------------------------------------------------------------------------------------------------------*
+*
+*At SELECTION-SCREEN on HELP-REQUEST FOR s_matnr.
+*
+*CALL FUNCTION 'HELP_OBJECT_SHOW'
+*  EXPORTING
+*    dokclass                            = 'TX'
+**   DOKLANGU                            = SY-LANGU
+*    dokname                             = 'ZV1_DOCCUR'
+**   DOKTITLE                            = ' '
+**   CALLED_BY_PROGRAM                   = ' '
+**   CALLED_BY_DYNP                      = ' '
+**   CALLED_FOR_TAB                      = ' '
+**   CALLED_FOR_FIELD                    = ' '
+**   CALLED_FOR_TAB_FLD_BTCH_INPUT       = ' '
+**   MSG_VAR_1                           = ' '
+**   MSG_VAR_2                           = ' '
+**   MSG_VAR_3                           = ' '
+**   MSG_VAR_4                           = ' '
+**   CALLED_BY_CUAPROG                   = ' '
+**   CALLED_BY_CUASTAT                   =
+**   SHORT_TEXT                          = ' '
+**   CLASSIC_SAPSCRIPT                   = ' '
+**   MES_PROGRAM_NAME                    = ' '
+**   MES_INCLUDE_NAME                    = ' '
+**   MES_LINE_NUMBER                     =
+**   MES_EXCEPTION                       = ' '
+* TABLES
+*   LINKS                               = lt_links
+* EXCEPTIONS
+*   OBJECT_NOT_FOUND                    = 1
+*   SAPSCRIPT_ERROR                     = 2
+*   OTHERS                              = 3
+*          .
+*IF sy-subrc <> 0.
+** Implement suitable error handling here
+*ENDIF.
+*
+*
+*
+*  LOOP AT lt_mseg INTO DATA(ls_mseg).
+*
+**    CLEAR ls_final.
+*
+*    ls_final-matnr = ls_mseg-matnr.
+*    ls_final-werks = ls_mseg-werks.
+*    ls_final-charg = ls_mseg-charg.
+*    ls_final-lgort = ls_mseg-lgort.
+*    ls_final-bwart = ls_mseg-bwart.
+*
+*
+*    READ TABLE lt_makt INTO DATA(ls_makt)
+*        WITH KEY matnr = ls_mseg-matnr.
+*    IF sy-subrc = 0.
+*      ls_final-maktx = ls_makt-maktx.
+*    ENDIF.
+*
+*
+*    READ TABLE lt_qals INTO DATA(ls_qals)
+*        WITH KEY matnr = ls_mseg-matnr.
+*    IF sy-subrc = 0.
+*      ls_final-uom = ls_qals-mengeneinh.
+*      ls_final-unrestricted = ls_qals-lmenge01.
+*      " ls_final-quality_lot = ls_qals-LMENGEZUB.
+*    ENDIF.
+*
+**IF  IS NOT INITIAL
+**   AND ls_final-qlty_hold <> 0
+**   AND ls_final-blocked <> 0.
+**
+**      ls_final-quality_inspection = ls_qals-lmengezub.
+**
+**    ENDIF.
+*    IF ls_qals-lmengezub IS NOT INITIAL.
+*      ls_final-quality_inspection = ls_qals-lmengezub.
+*    ENDIF.
+*
+*
+*
+*    READ TABLE lt_qave INTO DATA(ls_qave)
+*        WITH KEY prueflos = ls_qals-prueflos .
+*    IF sy-subrc = 0.
+*      CASE ls_qave-vcode.
+*        WHEN 'QH'.
+*          ls_final-qlty_hold = ls_qals-lmenge04.
+*        WHEN 'R'.
+*          ls_final-blocked = ls_qals-lmenge04.
+*      ENDCASE.
+*    ELSE.
+*      ls_final-quality_inspection = ls_qals-losmenge.
+*
+*    ENDIF.
+*
+*    APPEND ls_final TO lt_final.
+*    CLEAR ls_final.
+*
+*  ENDLOOP.
+*  DELETE ADJACENT DUPLICATES FROM lt_final COMPARING matnr.
+*
+**  IF lt_final IS NOT INITIAL.
+**    cl_demo_output=>display( lt_final ).
+**  ELSE.
+**    WRITE: / 'No data found'.
+**  ENDIF.
+**
+*
+*  DATA : lo_alv TYPE REF TO cl_salv_table.
+*  DATA : lv_columns TYPE REF TO cl_salv_columns_table.
+*  DATA : lv_column TYPE REF TO cl_salv_column.
+*
+*  IF lt_final IS NOT INITIAL.
+*    TRY.
+*        CALL METHOD cl_salv_table=>factory
+**  EXPORTING
+**    list_display   = IF_SALV_C_BOOL_SAP=>FALSE
+**    r_container    =
+**    container_name =
+*          IMPORTING
+*            r_salv_table = lo_alv
+*          CHANGING
+*            t_table      = lt_final.
+*      CATCH cx_salv_msg.
+*    ENDTRY.
+*
+*    DATA lo_functions TYPE REF TO cl_salv_functions_list.
+*
+*    lo_functions = lo_alv->get_functions( ).
+*    lo_functions->set_all( abap_true ).
+*
+*    DATA lo_columns TYPE REF TO cl_salv_columns_table.
+*
+*    lo_columns = lo_alv->get_columns( ).
+*    lo_columns->set_optimize( abap_true ).
+*
+*
+*    CALL METHOD lo_alv->get_columns
+*      RECEIVING
+*        value = lv_columns.
+*
+*    lv_column = lv_columns->get_column( 'QLTY_HOLD' ).
+*    lv_column->set_long_text( 'Quality on hold' ).
+*    lv_column->set_short_text( 'Q_hold' ).
+*    lv_column->set_medium_text( 'Qual_hold' ).
+*
+*    lv_column = lv_columns->get_column( 'BLOCKED' ).
+*    lv_column->set_short_text( 'Blocked' ).
+*    lv_column->set_medium_text( 'Blocked' ).
+*    lv_column->set_long_text( 'Blocked' ).
+*
+*    lv_column = lv_columns->get_column( 'QUALITY_INSPECTION' ).
+*    lv_column->set_long_text( 'quality_inspection' ).
+*    lv_column->set_short_text( 'q_ins' ).
+*    lv_column->set_medium_text( 'qual_insp' ).
+*
+*    lv_column = lv_columns->get_column( 'UNRESTRICTED' ).
+*    lv_column->set_long_text( 'unrestricted' ).
+*    lv_column->set_short_text( 'unres' ).
+*    lv_column->set_medium_text( 'unrestricted' ).
+*
+*    CALL METHOD lo_alv->display.
+*else.
+*    MESSAGE 'No data found for selection criteria' TYPE 'S' DISPLAY LIKE 'E'.
+*    LEAVE LIST-PROCESSING.
+*
+*
+*  ENDIF.
+**  IMPORTING
+**    exit_caused_by_caller =
+**    exit_caused_by_user   = .
+*
+*
+**NEW REPO LOG (1).docx
+**
+**ls_final-blocked = ls_qals-losmenge
+**
+**REPORT zmaterial_rep.
