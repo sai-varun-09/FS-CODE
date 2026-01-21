@@ -1,0 +1,193 @@
+*A
+***&---------------------------------------------------------------------*
+***& Report ZV1_FS_REPORT
+***&---------------------------------------------------------------------*
+***&
+***&---------------------------------------------------------------------*
+REPORT zv1_fs_report.
+
+
+TYPES: BEGIN OF ty_vbak,
+         vbeln TYPE vbak-vbeln,
+         erdat TYPE vbak-erdat,
+         auart TYPE vbak-auart,
+         vkorg TYPE vbak-vkorg,
+         vtweg TYPE vbak-vtweg,
+         spart TYPE vbak-spart,
+       END OF ty_vbak.
+
+TYPES: BEGIN OF ty_vbap,
+         vbeln  TYPE vbap-vbeln,
+         posnr  TYPE vbap-posnr,
+         matnr  TYPE vbap-matnr,
+         charg  TYPE vbap-charg,
+         netwr  TYPE vbap-netwr,
+         waerk  TYPE vbap-waerk,
+         kwmeng TYPE vbap-kwmeng,
+       END OF ty_vbap.
+
+TYPES: BEGIN OF ty_makt,
+         matnr TYPE makt-matnr,
+         maktx TYPE makt-maktx,
+       END OF ty_makt.
+
+TYPES: BEGIN OF ty_output,
+         vbeln  TYPE vbak-vbeln,
+         erdat  TYPE vbak-erdat,
+         auart  TYPE vbak-auart,
+         vkorg  TYPE vbak-vkorg,
+         vtweg  TYPE vbak-vtweg,
+         spart  TYPE vbak-spart,
+         posnr  TYPE vbap-posnr,
+         matnr  TYPE vbap-matnr,
+         maktx  TYPE makt-maktx,
+         charg  TYPE vbap-charg,
+         kwmeng TYPE vbap-kwmeng,
+         netwr  TYPE vbap-netwr,
+         waerk  TYPE vbap-waerk,
+       END OF ty_output.
+
+
+DATA: gt_vbak   TYPE TABLE OF ty_vbak,
+      gt_vbap   TYPE TABLE OF ty_vbap,
+      gt_makt   TYPE TABLE OF ty_makt,
+      gt_output TYPE TABLE OF ty_output,
+      gs_vbak   TYPE ty_vbak,
+      gs_vbap   TYPE ty_vbap,
+      gs_makt   TYPE ty_makt,
+      gs_output TYPE ty_output.
+
+DATA: st_vbeln TYPE vbak-vbeln,
+      st_erdat TYPE vbak-erdat.
+
+SELECT-OPTIONS:s_vbeln FOR st_vbeln,
+               s_erdat FOR st_erdat.
+
+
+CLASS lcl_salv_handler DEFINITION.
+  PUBLIC SECTION.
+    METHODS:
+      on_double_click
+        FOR EVENT double_click OF cl_salv_events_table
+        IMPORTING row column.
+
+ENDCLASS.
+
+DATA: go_handler TYPE REF TO lcl_salv_handler.
+
+CLASS lcl_salv_handler IMPLEMENTATION.
+  METHOD on_double_click.
+    DATA ls_output TYPE ty_output.
+
+    READ TABLE gt_output INTO ls_output INDEX row.
+    IF sy-subrc = 0 AND column = 'VBELN'.
+      SET PARAMETER ID 'AUN' FIELD ls_output-vbeln.
+      CALL TRANSACTION 'VA03' AND SKIP FIRST SCREEN.
+    ENDIF.
+  ENDMETHOD.
+ENDCLASS.
+
+
+START-OF-SELECTION.
+
+
+  SELECT vbeln
+         erdat
+         auart
+         vkorg
+         vtweg
+         spart
+    INTO TABLE gt_vbak
+    FROM vbak
+    WHERE vbeln IN s_vbeln
+      AND erdat IN s_erdat.
+
+  IF gt_vbak IS INITIAL.
+    MESSAGE TEXT-013 TYPE 'I'.
+    EXIT.
+  ELSE.
+
+    SELECT vbeln
+           posnr
+           matnr
+           charg
+           netwr
+           waerk
+           kwmeng
+      INTO TABLE gt_vbap
+      FROM vbap
+      FOR ALL ENTRIES IN gt_vbak
+      WHERE vbeln = gt_vbak-vbeln.
+
+  ENDIF.
+
+  IF gt_vbap IS NOT INITIAL.
+    SELECT matnr
+           maktx
+      INTO TABLE gt_makt
+      FROM makt
+      FOR ALL ENTRIES IN gt_vbap
+      WHERE matnr = gt_vbap-matnr
+        AND spras = sy-langu.
+  ENDIF.
+
+  LOOP AT gt_vbap INTO gs_vbap.
+    gs_output-posnr  = gs_vbap-posnr .
+    gs_output-matnr  = gs_vbap-matnr .
+    gs_output-charg  = gs_vbap-charg .
+    gs_output-netwr  = gs_vbap-netwr .
+    gs_output-waerk  = gs_vbap-waerk .
+    gs_output-kwmeng = gs_vbap-kwmeng.
+
+    READ TABLE gt_vbak INTO gs_vbak WITH KEY vbeln = gs_vbap-vbeln.
+    IF sy-subrc EQ 0.
+      gs_output-vbeln = gs_vbak-vbeln.
+      gs_output-erdat = gs_vbak-erdat.
+      gs_output-auart = gs_vbak-auart.
+      gs_output-vkorg = gs_vbak-vkorg.
+      gs_output-vtweg = gs_vbak-vtweg.
+      gs_output-spart = gs_vbak-spart.
+    ENDIF.
+    READ TABLE gt_makt INTO gs_makt WITH KEY matnr = gs_vbap-matnr.
+    IF sy-subrc EQ 0.
+      gs_output-maktx = gs_makt-maktx.
+    ENDIF.
+
+    APPEND gs_output TO gt_output.
+    CLEAR gs_output.
+
+
+
+  ENDLOOP.
+
+  DATA : fat_output TYPE REF TO cl_salv_table.
+  DATA : lv_columns TYPE REF TO cl_salv_columns_table.
+  DATA : lv_column TYPE REF TO cl_salv_column.
+
+
+  TRY.
+      CALL METHOD cl_salv_table=>factory
+        IMPORTING
+          r_salv_table = fat_output
+        CHANGING
+          t_table      = gt_output.
+    CATCH cx_salv_msg.
+  ENDTRY.
+
+  DATA lo_functions TYPE REF TO cl_salv_functions_list.
+
+  lo_functions =  fat_output->get_functions( ).
+  lo_functions->set_all( abap_true ).
+
+  DATA lo_columns TYPE REF TO cl_salv_columns_table.
+
+  lo_columns = fat_output->get_columns( ).
+  lo_columns->set_optimize( abap_true ).
+
+
+  DATA(lo_events) = fat_output->get_event( ).
+
+  CREATE OBJECT go_handler.
+  SET HANDLER go_handler->on_double_click FOR lo_events.
+
+  CALL METHOD fat_output->display( ).
