@@ -1,0 +1,20 @@
+*CLASS lcl_events DEFINITION.  "Declares a static method for double_click (definition)
+*  PUBLIC SECTION.
+*    CLASS-METHODS on_double_click
+*      FOR EVENT if_salv_events_actions_table~double_click
+*      OF cl_salv_events_table
+*      IMPORTING row column.
+*ENDCLASS.
+*
+*DATA: go_handler TYPE REF TO lcl_events.
+*
+*CLASS lcl_events IMPLEMENTATION. " class implementation.
+*  METHOD on_double_click.
+*    DATA ls_output TYPE ty_output.
+*    READ TABLE gt_output INTO gs_output INDEX row.
+*    IF sy-subrc = 0 AND column = 'VBELN'.
+*      SET PARAMETER ID 'AUN' FIELD ls_output-vbeln. " ANU ?
+*      CALL TRANSACTION 'VA03' AND SKIP FIRST SCREEN.
+*    ENDIF.
+*  ENDMETHOD.
+*ENDCLASS.
