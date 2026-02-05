@@ -1,0 +1,331 @@
+REPORT zv1_fs_report.
+
+TYPES: BEGIN OF ty_label,
+         key_id         TYPE zsd_label_recon-key_id,
+         lgnum          TYPE zsd_label_recon-lgnum,
+         werks          TYPE zsd_label_recon-werks,
+         matnr          TYPE zsd_label_recon-matnr,
+         charg          TYPE zsd_label_recon-charg,
+         udate          TYPE zsd_label_recon-udate,
+         uname          TYPE zsd_label_recon-uname,
+         uzeit          TYPE zsd_label_recon-uzeit,
+         version        TYPE zsd_label_recon-version,
+         reason_reprint TYPE zsd_label_recon-reason_reprint,
+         maxcount       TYPE zsd_label_recon-maxcount,
+         quantity       TYPE zsd_label_recon-quantity,
+         uom            TYPE zsd_label_recon-uom,
+         counter        TYPE zsd_label_recon-counter,
+         label_type     TYPE zsd_label_recon-label_type,
+         maktx          TYPE zsd_label_recon-maktx,
+         sunum          TYPE zsd_label_recon-sunum,
+         zlblnr         TYPE zsd_label_recon-zlblnr,
+         rstxt          TYPE zsd_label_recon-rstxt,
+         suqty          TYPE zsd_label_recon-suqty,
+
+       END OF ty_label.
+
+TYPES: BEGIN OF ty_output,
+         key_id         TYPE zsd_label_recon-key_id,
+         lgnum          TYPE zsd_label_recon-lgnum,
+         werks          TYPE zsd_label_recon-werks,
+         matnr          TYPE zsd_label_recon-matnr,
+         charg          TYPE zsd_label_recon-charg,
+         udate          TYPE zsd_label_recon-udate,
+         uname          TYPE zsd_label_recon-uname,
+         uzeit          TYPE zsd_label_recon-uzeit,
+         version        TYPE zsd_label_recon-version,
+         reason_reprint TYPE zsd_label_recon-reason_reprint,
+         maxcount       TYPE zsd_label_recon-maxcount,
+         quantity       TYPE zsd_label_recon-quantity,
+         uom            TYPE zsd_label_recon-uom,
+         counter        TYPE zsd_label_recon-counter,
+         label_type     TYPE zsd_label_recon-label_type,
+         maktx          TYPE zsd_label_recon-maktx,
+         sunum          TYPE zsd_label_recon-sunum,
+         zlblnr         TYPE zsd_label_recon-zlblnr,
+         rstxt          TYPE zsd_label_recon-rstxt,
+         suqty          TYPE zsd_label_recon-suqty,
+       END OF ty_output.
+
+DATA: gt_label  TYPE TABLE OF ty_label,
+      gt_output TYPE TABLE OF ty_output,
+      gs_label  TYPE ty_label,
+      gs_output TYPE ty_output.
+
+DATA: st_id       TYPE zsd_label_recon-key_id,
+      st_w_num    TYPE zsd_label_recon-lgnum,
+      st_plant    TYPE zsd_label_recon-werks,
+      st_material TYPE zsd_label_recon-matnr,
+      st_charg    TYPE zsd_label_recon-charg,
+      st_date     TYPE zsd_label_recon-udate.
+
+SELECT-OPTIONS: s_id    FOR st_id,
+                s_w_num FOR st_w_num,
+                s_plant FOR st_plant,
+                s_mat   FOR st_material,
+                s_charg FOR st_charg,
+                s_date  FOR st_date.
+
+
+PARAMETERS: r_tl RADIOBUTTON GROUP r1 DEFAULT 'X',
+            r_su RADIOBUTTON GROUP r1,
+            r_im RADIOBUTTON GROUP r1,
+            r_wm RADIOBUTTON GROUP r1.
+
+
+START-OF-SELECTION.
+
+  SELECT key_id
+         lgnum
+         werks
+         matnr
+         charg
+         udate
+         uname
+         uzeit
+         version
+         reason_reprint
+         maxcount
+         quantity
+         uom
+         counter
+         label_type
+         maktx
+         sunum
+         zlblnr
+         rstxt
+         suqty
+        INTO TABLE gt_label
+        FROM zsd_label_recon
+        WHERE key_id IN s_id AND
+              lgnum  IN s_w_num AND
+              werks  IN s_plant AND
+              matnr  IN s_mat AND
+              charg  IN s_charg AND
+              udate  IN s_date.
+
+  LOOP AT gt_label INTO gs_label.
+    gs_output-key_id         = gs_label-key_id.
+    gs_output-lgnum          = gs_label-lgnum.
+    gs_output-werks          = gs_label-werks.
+    gs_output-matnr          = gs_label-matnr.
+    gs_output-charg          = gs_label-charg.
+    gs_output-udate          = gs_label-udate.
+    gs_output-uname          = gs_label-uname.
+    gs_output-uzeit          = gs_label-uzeit.
+    gs_output-version        = gs_label-version.
+    gs_output-reason_reprint = gs_label-reason_reprint.
+    gs_output-maxcount       = gs_label-maxcount.
+    gs_output-quantity       = gs_label-quantity.
+    gs_output-uom            = gs_label-uom.
+    gs_output-counter        = gs_label-counter.
+    gs_output-label_type     = gs_label-label_type.
+    gs_output-maktx          = gs_label-maktx.
+    gs_output-sunum          = gs_label-sunum.
+    gs_output-zlblnr         = gs_label-zlblnr.
+    gs_output-rstxt          = gs_label-rstxt.
+    gs_output-suqty          = gs_label-suqty.
+
+    APPEND gs_output TO gt_output.
+    CLEAR gs_output.
+
+  ENDLOOP.
+
+  DATA : fat_output TYPE REF TO cl_salv_table.
+  DATA : lv_columns TYPE REF TO cl_salv_columns_table.
+  DATA : lv_column TYPE REF TO cl_salv_column.
+
+
+  TRY.
+
+
+      "DATA:    o_events   TYPE REF TO cl_salv_events_table.
+
+      CALL METHOD cl_salv_table=>factory
+        IMPORTING
+          r_salv_table = fat_output
+        CHANGING
+          t_table      = gt_output.
+
+
+    CATCH cx_salv_msg.
+  ENDTRY.
+
+  DATA lo_functions TYPE REF TO cl_salv_functions_list.
+
+  lo_functions =  fat_output->get_functions( ).
+  lo_functions->set_all( abap_true ).
+
+  DATA lo_columns TYPE REF TO cl_salv_columns_table.
+
+  lo_columns = fat_output->get_columns( ).
+  lo_columns->set_optimize( abap_true ).
+
+
+  CALL METHOD fat_output->display( ).
+
+
+*TYPES: BEGIN OF ty_acdoca,
+*         rbukrs TYPE acdoca-rbukrs, "3
+*         gjahr  TYPE acdoca-gjahr,  "4
+*         belnr  TYPE acdoca-belnr,  "5
+*         racct  TYPE acdoca-racct,  "84
+*         prctr  TYPE acdoca-prctr,  "87
+*         tsl    TYPE acdoca-tsl,    "101
+*         budat  TYPE acdoca-budat,  "185
+*         lifnr  TYPE acdoca-lifnr,  "229
+*
+*       END OF ty_acdoca.
+*
+*TYPES: BEGIN OF ty_lfa1,
+*         lifnr TYPE lfa1-lifnr,
+*         name1 TYPE lfa1-name1,
+*       END OF ty_lfa1.
+*
+*TYPES: BEGIN OF ty_output,
+*         rbukrs TYPE acdoca-rbukrs, "3
+*         gjahr  TYPE acdoca-gjahr,  "4
+*         belnr  TYPE acdoca-belnr,  "5
+*         racct  TYPE acdoca-racct,  "84
+*         prctr  TYPE acdoca-prctr,  "87
+*         tsl    TYPE acdoca-tsl,    "101
+*         budat  TYPE acdoca-budat,  "185
+*         lifnr  TYPE acdoca-lifnr,  "229
+*         name1  TYPE lfa1-name1,
+*       END OF ty_output.
+*
+*DATA: gt_acdoca TYPE TABLE OF ty_acdoca,
+*      gt_lfa1   TYPE TABLE OF ty_lfa1,
+*      gt_output TYPE TABLE OF ty_output,
+*      gs_acdoca TYPE ty_acdoca,
+*      gs_lfa1   TYPE ty_lfa1,
+*      gs_output TYPE ty_output.
+*
+*
+*DATA: st_rbukrs TYPE acdoca-rbukrs,
+*      st_gjahr  TYPE acdoca-gjahr,
+*      st_racct  TYPE acdoca-racct,
+*      st_budat  TYPE acdoca-budat,
+*      st_prctr  TYPE acdoca-prctr.
+*
+*SELECT-OPTIONS: s_rbukrs FOR st_rbukrs,
+*                s_gjahr  FOR  st_gjahr,
+*                s_racct  FOR  st_racct,
+*                s_budat  FOR  st_budat,
+*                s_prctr  FOR  st_prctr.
+*
+*START-OF-SELECTION.
+*
+**  IF s_rbukrs IS INITIAL.
+**    MESSAGE TEXT-000 TYPE 'E'.
+**  ELSE.
+*  SELECT
+*         rbukrs
+*         gjahr
+*         belnr
+*         racct
+*         prctr
+*         tsl
+*         budat
+*         lifnr
+*         INTO TABLE gt_acdoca
+*         FROM acdoca
+*         WHERE rbukrs IN s_rbukrs AND
+*               gjahr  IN s_gjahr  AND
+*               racct  IN s_racct  AND
+*               budat  IN s_budat  AND
+*               prctr  IN s_prctr.
+**  ENDIF.
+*
+*  IF gt_acdoca IS NOT INITIAL.
+*    SELECT
+*          lifnr
+*          name1
+*          INTO TABLE gt_lfa1
+*          FROM lfa1
+*          FOR ALL ENTRIES IN gt_acdoca
+*          WHERE lifnr = gt_acdoca-lifnr.
+*  ENDIF.
+*
+*  LOOP AT gt_acdoca INTO gs_acdoca.
+*    IF sy-subrc EQ 0.
+*      gs_output-rbukrs = gs_acdoca-rbukrs.
+*      gs_output-gjahr  = gs_acdoca-gjahr.
+*      gs_output-belnr  = gs_acdoca-belnr.
+*      gs_output-racct  = gs_acdoca-racct.
+*      gs_output-prctr  = gs_acdoca-prctr.
+*      gs_output-tsl    = gs_acdoca-tsl.
+*      gs_output-budat  = gs_acdoca-budat.
+*      gs_output-lifnr  = gs_acdoca-lifnr.
+*    ENDIF.
+*    READ TABLE gt_lfa1 INTO gs_lfa1 WITH KEY lifnr = gs_acdoca-lifnr.
+*    IF sy-subrc EQ 0.
+*      gs_output-name1 = gs_lfa1-name1.
+*    ENDIF.
+*    APPEND gs_output TO gt_output.
+*    CLEAR gs_output.
+*  ENDLOOP.
+*
+*
+*
+**
+**  DATA : lo_alv TYPE REF TO cl_salv_table.
+**  DATA : lv_columns TYPE REF TO cl_salv_columns_table.
+**  DATA : lv_column TYPE REF TO cl_salv_column.
+**
+**  IF gt_output IS NOT INITIAL.
+**    TRY.
+**        CALL METHOD cl_salv_table=>factory
+***  EXPORTING
+***    list_display   = IF_SALV_C_BOOL_SAP=>FALSE
+***    r_container    =
+***    container_name =
+**          IMPORTING
+**            r_salv_table = lo_alv
+**          CHANGING
+**            t_table      = gt_output.
+**      CATCH cx_salv_msg.
+**    ENDTRY.
+**
+**    DATA lo_functions TYPE REF TO cl_salv_functions_list.
+**
+**    lo_functions = lo_alv->get_functions( ).
+**    lo_functions->set_all( abap_true ).
+**
+**    DATA lo_columns TYPE REF TO cl_salv_columns_table.
+**
+**    lo_columns = lo_alv->get_columns( ).
+**    lo_columns->set_optimize( abap_true ).
+**
+**
+**
+**
+**    CALL METHOD lo_alv->display.
+**  ELSE.
+**    MESSAGE 'No data found for selection criteria' TYPE 'S' DISPLAY LIKE 'E'.
+**    LEAVE LIST-PROCESSING.
+**
+**
+**  ENDIF.
+*
+*DATA: lo_alv TYPE REF TO cl_salv_table.
+*
+*TRY.
+*CALL METHOD cl_salv_table=>factory
+**  EXPORTING
+**    list_display   = IF_SALV_C_BOOL_SAP=>FALSE
+**    r_container    =
+**    container_name =
+*  IMPORTING
+*    r_salv_table   = lo_alv
+*  CHANGING
+*    t_table        = gt_output.
+*
+*  CATCH cx_salv_msg.
+*ENDTRY.
+*
+*CALL METHOD lo_alv->if_salv_gui_om_table_action~display
+**  IMPORTING
+**    exit_caused_by_caller =
+**    exit_caused_by_user   =
+*    .
