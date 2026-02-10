@@ -1,0 +1,382 @@
+REPORT zv1_fs_biocon.
+
+TYPES: BEGIN OF ty_mchb,
+         werks TYPE mchb-werks,
+         lgort TYPE mchb-lgort,
+         matnr TYPE mchb-matnr,
+         charg TYPE mchb-charg,
+         clabs TYPE mchb-clabs,
+       END OF ty_mchb.
+
+TYPES: BEGIN OF ty_mch1,
+         matnr TYPE mch1-matnr,
+         charg TYPE mch1-charg,
+         vfdat TYPE mch1-vfdat,
+       END OF ty_mch1.
+
+TYPES: BEGIN OF ty_output,
+         werks TYPE mchb-werks,
+         lgort TYPE mchb-lgort,
+         matnr TYPE mchb-matnr,
+         charg TYPE mchb-charg,
+         clabs TYPE mchb-clabs,
+         prlab TYPE mspr-prlab,
+       END OF ty_output.
+
+TYPES: BEGIN OF ty_mspr,
+         matnr TYPE mspr-matnr,
+         charg TYPE mspr-charg,
+         prlab TYPE mspr-prlab,
+         lgort TYPE mspr-lgort,
+         werks TYPE mspr-werks,
+       END OF ty_mspr.
+
+DATA: gt_mchb   TYPE TABLE OF ty_mchb,
+      gt_mch1   TYPE TABLE OF ty_mch1,
+      gt_mspr   TYPE TABLE OF ty_mspr,
+      gt_output TYPE TABLE OF ty_output,
+      gs_mchb   TYPE ty_mchb,
+      gs_mch1   TYPE ty_mch1,
+      gs_mspr   TYPE ty_mspr,
+      gs_output TYPE ty_output.
+
+DATA: st_werks TYPE mchb-werks,
+      st_lgort TYPE mchb-lgort,
+      st_matnr TYPE mchb-matnr,
+      st_mtart TYPE mtart,
+      st_charg TYPE mch1-charg,
+      st_date  TYPE datum.
+
+DATA: cut_off_date TYPE datum.
+
+DATA: material_doc TYPE string,
+      doc_year     TYPE string.
+
+SELECTION-SCREEN BEGIN OF BLOCK b1 WITH FRAME TITLE text-000.
+
+SELECT-OPTIONS:
+                s_werks FOR st_werks,
+                s_lgort FOR st_lgort,
+                s_matnr FOR st_matnr,
+                s_mtart FOR st_mtart,
+                s_charg FOR st_charg,
+                s_date FOR st_date NO INTERVALS.
+
+PARAMETERS: p_mvt TYPE string.
+
+SELECTION-SCREEN END OF BLOCK b1.
+
+cut_off_date = sy-datum + s_date-high.
+
+SELECTION-SCREEN BEGIN OF BLOCK b2 WITH FRAME TITLE text-001.
+
+PARAMETERS: r_as  RADIOBUTTON GROUP r1,
+            r_sos RADIOBUTTON GROUP r1,
+            r_pst RADIOBUTTON GROUP r1.
+
+SELECTION-SCREEN END OF BLOCK b2.
+
+START-OF-SELECTION.
+
+  " R1 - Approved Stock (AS) ------------------------------>
+
+  IF r_as = 'X'.
+    SELECT
+           matnr
+           charg
+           INTO TABLE gt_mchb
+           FROM mchb
+           WHERE werks IN s_werks
+                 AND clabs > 0
+                 AND lvorm <> 'X'
+                 AND charg IS NOT NULL.
+
+    IF gt_mchb IS INITIAL.
+      MESSAGE text-003 TYPE 'E'.
+
+    ELSE.
+
+      SELECT
+             matnr
+             charg
+             vfdat
+             INTO TABLE gt_mch1
+             FROM mch1
+             FOR ALL ENTRIES IN gt_mchb
+              WHERE matnr = gt_mchb-matnr
+                    AND charg = gt_mchb-charg
+                    AND vfdat <= cut_off_date
+                    AND vfdat IS NOT NULL.
+    ENDIF.
+
+    IF gt_mch1 IS INITIAL.
+      MESSAGE text-004 TYPE 'E'.
+
+    ELSE.
+
+      SELECT werks
+             lgort
+             matnr
+             charg
+             clabs
+             INTO TABLE gt_mchb
+        FROM mchb
+        FOR ALL ENTRIES IN gt_mch1
+        WHERE matnr = gt_mch1-matnr
+          AND charg = gt_mch1-charg.
+    ENDIF.
+
+*    LOOP AT gt_mchb INTO gs_mchb.
+*      LOOP AT gt_mch1 INTO gs_mch1.
+*        LOOP AT gt_output INTO gs_output.
+
+  LOOP AT gt_mchb INTO gs_mchb.
+
+    gs_output-matnr = gs_mchb-matnr.
+    gs_output-charg = gs_mchb-charg.
+    gs_output-WERKS = gs_mchb-WERKS.
+    gs_output-LGORT = gs_mchb-LGORT.
+    gs_output-CLABS = gs_mchb-CLABS.
+
+    READ TABLE gt_mch1 INTO gs_mch1 WITH KEY matnr = gs_mchb-matnr.
+
+    IF sy-subrc eq 0.
+    gs_output-matnr = gs_mch1-matnr.
+    gs_output-charg = gs_mch1-charg.
+    APPEND gs_output to gt_output.
+    clear gs_output.
+
+    ENDIF.
+
+  ENDLOOP.
+
+  LOOP AT gt_output INTO gs_output.
+
+
+          CALL FUNCTION 'BAPI_GOODSMVT_CREATE'
+            EXPORTING
+              goodsmvt_header-pstng_date = sy-datum
+              goodsmvt_header-doc_date   = sy-datum
+              goodsmvt_code              = '04'
+              material                   = gs_mchb-matnr
+              plant                      = gs_mchb-werks
+              stge_loc                   = gs_mchb-lgort
+              batch                      = gs_mchb-charg
+              move_type                  = '344'
+              entry_qnt                  = gs_mchb-clabs
+              move_reas                  = p_mvt
+            IMPORTING
+              materialdocument           = material_doc
+              matdocumentyear            = doc_year
+            TABLES
+              goodsmvt_item              = gt_output.
+
+  ENDLOOP.
+*        ENDLOOP.
+*      ENDLOOP.
+*    ENDLOOP.
+  ENDIF.
+
+  " R2 - Sales Order Stock (SOS) ------------------------>
+
+  IF r_sos = 'X'.
+    SELECT matnr
+           charg
+           INTO TABLE gt_mchb
+      FROM mchb
+      WHERE werks IN s_werks
+        AND clabs > 0
+        AND lvorm <> 'X'.
+
+    IF gt_mchb IS INITIAL.
+      MESSAGE text-003 TYPE 'E'.
+
+    ELSE.
+
+      SELECT matnr
+             charg
+             vfdat
+             INTO TABLE gt_mch1
+        FROM mch1
+        FOR ALL ENTRIES IN gt_mchb
+        WHERE matnr = gt_mchb-matnr
+          AND charg = gt_mchb-charg
+          AND vfdat <= cut_off_date
+          AND vfdat IS NOT NULL.
+    ENDIF.
+
+    IF gt_mch1 IS INITIAL.
+      MESSAGE text-004 TYPE 'E'.
+
+    ELSE.
+
+      SELECT werks
+             lgort
+             matnr
+             charg
+             clabs
+             INTO TABLE gt_mchb
+        FROM mchb
+        FOR ALL ENTRIES IN gt_mch1
+        WHERE matnr = gt_mch1-matnr
+          AND charg = gt_mch1-charg.
+    ENDIF.
+
+*    LOOP AT gt_mchb INTO gs_mchb.
+*      LOOP AT gt_mch1 INTO gs_mch1.
+
+LOOP AT gt_mchb INTO gs_mchb.
+
+  gs_output-werks = gs_mchb-werks.
+  gs_output-lgort = gs_mchb-lgort.
+  gs_output-matnr = gs_mchb-matnr.
+  gs_output-charg = gs_mchb-charg.
+  gs_output-clabs = gs_mchb-clabs.
+   READ TABLE gt_mch1 INTO gs_mch1 WITH KEY matnr = gs_MCH1-MATNR.
+
+  gs_output-matnr  = gs_mch1-matnr.
+  gs_output-charg  = gs_mch1-charg.   " do i have to pass mch1 to output if yes which data will get in output table matnr or mch1
+
+  APPEND gs_output to gt_output.
+  CLEAR gs_output.
+
+ENDLOOP.
+
+        LOOP AT gt_output INTO gs_output.
+          CALL FUNCTION 'BAPI_GOODSMVT_CREATE'
+            EXPORTING
+              goodsmvt_header-pstng_date = sy-datum
+              goodsmvt_header-doc_date   = sy-datum
+              goodsmvt_code              = '04'
+              material                   = gs_mchb-matnr
+              plant                      = gs_mchb-werks
+              stge_loc                   = gs_mchb-lgort
+              batch                      = gs_mchb-charg
+              move_type                  = '344'
+              entry_qnt                  = gs_mchb-clabs
+              move_reas                  = p_mvt
+            IMPORTING
+              materialdocument           = material_doc
+              matdocumentyear            = doc_year
+            TABLES
+              goodsmvt_item              = gt_output.
+        ENDLOOP.
+*      ENDLOOP.
+*    ENDLOOP.
+  ENDIF.
+
+  " R3 - Project Stock (PST) ---------------------------->
+
+  IF r_pst = 'X'.
+    SELECT matnr
+           charg
+           INTO TABLE gt_mspr
+      FROM mspr
+      WHERE werks IN s_werks
+        AND prlab > 0
+        AND sobkz = 'Q'.
+
+    IF gt_mspr IS INITIAL.
+      MESSAGE text-003 TYPE 'E'.
+
+    ELSE.
+
+      SELECT matnr
+             charg
+             vfdat
+             INTO TABLE gt_mch1
+        FROM mch1
+        FOR ALL ENTRIES IN gt_mspr
+        WHERE matnr = gt_mspr-matnr
+          AND charg = gt_mspr-charg
+          AND vfdat <= cut_off_date
+          AND vfdat IS NOT NULL.
+    ENDIF.
+
+    IF gt_mch1 IS INITIAL.
+      MESSAGE text-004 TYPE 'E'.
+
+    ELSE.
+
+      SELECT werks
+             lgort
+             matnr
+             charg
+             prlab
+             INTO TABLE gt_mspr
+        FROM mspr
+        FOR ALL ENTRIES IN gt_mch1
+        WHERE matnr = gt_mch1-matnr
+          AND charg = gt_mch1-charg.
+    ENDIF.
+
+*    LOOP AT gt_mspr INTO gs_mspr.
+*      LOOP AT gt_mch1 INTO gs_mch1.
+
+LOOP AT gt_mspr INTO gs_mspr.
+  gs_output-werks = gs_mspr-werks.
+  gs_output-lgort = gs_mspr-lgort.
+  gs_output-matnr = gs_mspr-matnr.
+  gs_output-charg = gs_mspr-charg.
+  gs_output-prlab = gs_mspr-prlab.
+  READ TABLE gt_mch1 INTO gs_mch1 WITH KEY matnr = gs_mspr-matnr.
+  gs_output-matnr = gs_mch1-matnr.
+  gs_output-charg = gs_mch1-charg.
+
+
+ENDLOOP.
+
+        LOOP AT gt_output INTO gs_output.
+          CALL FUNCTION 'BAPI_GOODSMVT_CREATE'
+            EXPORTING
+              goodsmvt_header-pstng_date = sy-datum
+              goodsmvt_header-doc_date   = sy-datum
+              goodsmvt_code              = '04'
+              material                   = gs_mspr-matnr
+              plant                      = gs_mspr-werks
+              stge_loc                   = gs_mspr-lgort
+              batch                      = gs_mspr-charg
+              move_type                  = '344'
+              entry_qnt                  = gs_mspr-prlab
+              move_reas                  = p_mvt
+            IMPORTING
+              materialdocument           = material_doc
+              matdocumentyear            = doc_year
+            TABLES
+              goodsmvt_item              = gt_output.
+        ENDLOOP.
+*      ENDLOOP.
+*    ENDLOOP.
+  ENDIF.
+
+END-OF-SELECTION.
+
+
+
+  DATA : fat_output TYPE REF TO cl_salv_table.
+  DATA : lv_columns TYPE REF TO cl_salv_columns_table.
+  DATA : lv_column TYPE REF TO cl_salv_column.
+
+  TRY.
+      DATA: o_events TYPE REF TO cl_salv_events_table.
+
+      CALL METHOD cl_salv_table=>factory
+        IMPORTING
+          r_salv_table = fat_output
+        CHANGING
+          t_table      = gt_output.
+
+    CATCH cx_salv_msg.
+  ENDTRY.
+
+  DATA lo_functions TYPE REF TO cl_salv_functions_list.
+
+  lo_functions = fat_output->get_functions( ).
+  lo_functions->set_all( abap_true ).
+
+  DATA lo_columns TYPE REF TO cl_salv_columns_table.
+
+  lo_columns = fat_output->get_columns( ).
+  lo_columns->set_optimize( abap_true ).
+
+  CALL METHOD fat_output->display( ).
